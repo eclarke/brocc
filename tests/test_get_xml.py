@@ -2,11 +2,12 @@ import tempfile
 import unittest
 
 from brocclib.get_xml import (
-    get_taxid, get_lineage, NcbiEutils, get_taxid_from_accession,
-    )
+    get_lineage, NcbiEutils, get_taxid_from_accession,
+)
 
 
 class NcbiEutilsTests(unittest.TestCase):
+
     def setUp(self):
         self.cache_file = tempfile.NamedTemporaryFile(suffix=".json")
         self.db = NcbiEutils(self.cache_file.name)
@@ -15,7 +16,7 @@ class NcbiEutilsTests(unittest.TestCase):
         lineages = {
             "taxon1": {'class': "a", "genus": "b"},
             "taxon2": {'class': "c", "genus": "d"},
-            }
+        }
         taxon_ids = {"taxon1": "b", "taxon2": "d"}
         self.db.lineages = lineages
         self.db.taxon_ids = taxon_ids
@@ -56,11 +57,15 @@ class NcbiEutilsTests(unittest.TestCase):
 
 
 class FunctionTests(unittest.TestCase):
-    def test_get_taxid(self):
-        self.assertEqual(get_taxid("312434489"), "531911")
+
+    # def test_get_taxid(self):
+    #     self.assertEqual(get_taxid("312434489"), "531911")
 
     def test_get_taxid_from_accession(self):
-        self.assertEqual(get_taxid("HQ844023.1"), "1056490")
+        self.assertEqual(get_taxid_from_accession("HQ844023.1"), "1056490")
+
+    # def test_get_taxid_from_accession(self):
+    #     self.assertEqual(get_taxid("HQ844023.1"), "1056490")
 
     def test_getLineage(self):
         lineage = get_lineage("531911")

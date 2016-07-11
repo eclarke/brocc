@@ -7,7 +7,9 @@ Created on Aug 29, 2011
 @author: Serena, Kyle
 '''
 
+
 class AssignmentCandidate(object):
+
     def __init__(self, lineage, rank):
         self.votes = 0
         self.lineage = lineage
@@ -30,6 +32,7 @@ class AssignmentCandidate(object):
 
 
 class Assignment(object):
+
     def __init__(self, query_id, winning_candidate, total_votes, num_generic):
         self.query_id = query_id
         self.winning_candidate = winning_candidate
@@ -53,6 +56,7 @@ class Assignment(object):
 
 class NoAssignment(object):
     """Null object representing no assignment, with message."""
+
     def __init__(self, query_id, message):
         self.query_id = query_id
         self.message = message
@@ -68,7 +72,7 @@ class Assigner(object):
     ranks = [
         "species", "genus", "family", "order",
         "class", "phylum", "kingdom", "domain",
-        ]
+    ]
 
     def __init__(self, min_cover, species_min_id, genus_min_id, min_id,
                  consensus_thresholds, max_generic, taxa_db):
@@ -76,7 +80,7 @@ class Assigner(object):
         self.rank_min_ids = [
             species_min_id, genus_min_id, min_id, min_id,
             min_id, min_id, min_id, min_id,
-            ]
+        ]
         self.min_id = min_id
         self.consensus_thresholds = consensus_thresholds
         self.max_generic = max_generic
