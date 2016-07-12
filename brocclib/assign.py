@@ -75,7 +75,7 @@ class Assigner(object):
     ]
 
     def __init__(self, min_cover, species_min_id, genus_min_id, min_id,
-                 consensus_thresholds, max_generic, taxa_db):
+                 consensus_thresholds, max_generic, taxa_db, taxdict, taxonomy):
         self.min_cover = min_cover
         self.rank_min_ids = [
             species_min_id, genus_min_id, min_id, min_id,
@@ -85,6 +85,10 @@ class Assigner(object):
         self.consensus_thresholds = consensus_thresholds
         self.max_generic = max_generic
         self.taxa_db = taxa_db
+        self.taxdict = taxdict
+        self.taxonomy = taxonomy
+
+    
 
     def _quality_filter(self, seq, hits):
         hits_to_keep = []
@@ -113,13 +117,15 @@ class Assigner(object):
         return self.vote(name, seq, hits_to_keep)
 
     def _retrieve_lineage(self, hit):
-        taxid = self.taxa_db.get_taxon_id(hit.accession)
+        taxid = self.taxdict[hit.accession]
+        # taxid = self.taxa_db.get_taxon_id(hit.accession)
         if taxid is None:
             return NoLineage()
-        raw_lineage = self.taxa_db.get_lineage(taxid)
-        if raw_lineage is None:
-            return NoLineage()
-        return Lineage(raw_lineage)
+        return self.taxonomy[taxid]
+        # raw_lineage = self.taxa_db.get_lineage(taxid)
+        # if raw_lineage is None:
+        #     return NoLineage()
+        # return Lineage(raw_lineage)
 
     def vote(self, name, seq, hits):
         # Sort hits by percent ID.  This affects the way that ties are broken.

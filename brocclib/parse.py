@@ -1,4 +1,5 @@
 from collections import defaultdict
+from batch import build_taxdict, build_taxonomy
 
 '''
 Created on Aug 29, 2011
@@ -59,6 +60,15 @@ def read_blast(blast_lines):
     for query_id, hit in iter_blast(blast_lines):
         res[query_id].append(hit)
     return res
+
+def build_taxdict(blast_hits):
+    """Map accession numbers from BLAST results to tax id."""
+    queries = blast_hits.keys()
+    accns = []
+    for query in queries:
+        accns += [h.accession for h in blast_hit[query]]
+    taxdict = build_taxdict(accns)
+    return taxdict
 
 def parse_accession(desc):
     if "|" in desc:

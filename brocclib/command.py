@@ -4,9 +4,13 @@ import logging
 import optparse
 import os
 
+from Bio import Entrez
+
+
 from brocclib.assign import Assigner
 from brocclib.get_xml import NcbiEutils
 from brocclib.parse import iter_fasta, read_blast
+from brocclib.batch import build_taxdict, build_taxonomy
 
 
 '''
@@ -14,6 +18,7 @@ Created on Aug 29, 2011
 @author: Serena, Kyle
 '''
 
+Entrez.email = 'ecl@mail.med.upenn.edu'
 
 CONSENSUS_THRESHOLDS = [
     ("species", 0.6),
@@ -92,9 +97,6 @@ def main(argv=None):
     taxa_db.load_cache()
 
     consensus_thresholds = [t for _, t in CONSENSUS_THRESHOLDS]
-    assigner = Assigner(
-        opts.min_cover, opts.min_species_id, opts.min_genus_id, opts.min_id,
-        consensus_thresholds, opts.max_generic, taxa_db)
 
     # Read input files
     
@@ -119,6 +121,21 @@ def main(argv=None):
 
     # Do the work
 
+    # Build accn -> taxid dict
+    accns = []
+    for seq in sequences:
+        accns += [hit.accession for hit in blast_hits[seq[0]]]
+    taxdict = build_taxdict(accns)
+
+    
+    # Build the taxonomy
+    taxonomy = build_taxonomy(taxdict.values())
+
+    assigner = Assigner(
+        opts.min_cover, opts.min_species_id, opts.min_genus_id, opts.min_id,
+        consensus_thresholds, opts.max_generic, taxa_db, taxdict, taxonomy)
+
+    
     for name, seq in sequences:
         seq_hits = blast_hits[name]
         # This is where the magic happens
