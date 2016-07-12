@@ -1,10 +1,10 @@
 from collections import defaultdict
-from batch import build_taxdict, build_taxonomy
 
 '''
 Created on Aug 29, 2011
 @authors: Serena, Kyle
 '''
+
 
 def iter_fasta(fasta_lines):
     """Yield sequences as (name, value) pairs from a FASTA file."""
@@ -23,7 +23,9 @@ def iter_fasta(fasta_lines):
 
 
 class BlastHit(object):
-    def __init__(self, accession, pct_id, length):
+
+    def __init__(self, gi, accession, pct_id, length):
+        self.gi = gi
         self.accession = accession
         self.pct_id = pct_id
         self.length = length
@@ -47,10 +49,11 @@ def iter_blast(blast_lines):
                 query_id = vals[0]
             else:
                 query_id = full_query_id
+            gi = parse_gi(vals[1])
             accession = parse_accession(vals[1])
             pct_id = float(vals[2])
             length = float(vals[3])
-            hit = BlastHit(accession, pct_id, length)
+            hit = BlastHit(gi, accession, pct_id, length)
             yield query_id, hit
 
 
@@ -61,14 +64,6 @@ def read_blast(blast_lines):
         res[query_id].append(hit)
     return res
 
-def build_taxdict(blast_hits):
-    """Map accession numbers from BLAST results to tax id."""
-    queries = blast_hits.keys()
-    accns = []
-    for query in queries:
-        accns += [h.accession for h in blast_hit[query]]
-    taxdict = build_taxdict(accns)
-    return taxdict
 
 def parse_accession(desc):
     if "|" in desc:
@@ -77,3 +72,8 @@ def parse_accession(desc):
     else:
         # New format
         return desc
+
+
+def parse_gi(desc):
+    if desc.startswith("gi|"):
+        return desc.split("|")[1]

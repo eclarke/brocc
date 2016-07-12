@@ -88,8 +88,6 @@ class Assigner(object):
         self.taxdict = taxdict
         self.taxonomy = taxonomy
 
-    
-
     def _quality_filter(self, seq, hits):
         hits_to_keep = []
         num_low_coverage = 0
@@ -117,11 +115,15 @@ class Assigner(object):
         return self.vote(name, seq, hits_to_keep)
 
     def _retrieve_lineage(self, hit):
-        taxid = self.taxdict[hit.accession]
+        taxid = self.taxdict.get(hit.accession)
         # taxid = self.taxa_db.get_taxon_id(hit.accession)
         if taxid is None:
             return NoLineage()
-        return self.taxonomy[taxid]
+        lineage = self.taxonomy.get(taxid)
+        if lineage is None:
+            return NoLineage()
+        else:
+            return lineage
         # raw_lineage = self.taxa_db.get_lineage(taxid)
         # if raw_lineage is None:
         #     return NoLineage()
