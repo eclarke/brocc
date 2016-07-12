@@ -46,9 +46,10 @@ def _bulk_taxids_from_accns(accns, batch_size=200):
             dbfrom='nucleotide', linkname='nucleotide_taxonomy',
             id=accns[start:end])
         result = Entrez.read(handle)
-#        assert len(result) == len(accns[start:end])
+
+        if len(result) != len(accns[start:end]):
+            print("Result length %s is not the same size as number of queries (%s)" % (len(result), len(accns[start:end])))
         for link, accn in izip(result, accns[start:end]):
-            print(link)
             try:
                 taxid = link['LinkSetDb'][0]['Link'][0]['Id']
             except (KeyError, IndexError):
