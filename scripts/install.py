@@ -1,14 +1,15 @@
+from __future__ import division
 import hashlib
+import math
 import subprocess
 import urllib2
 import os
 import gzip
-import mmap
-import contextlib
 import sqlite3
 import csv
 import itertools
 import argparse
+
 from tqdm import tqdm
 
 schema = """\
@@ -18,65 +19,53 @@ CREATE TABLE accn_taxid(
    taxid INT NOT NULL);
 """
 
-import_command = """\
-.separator \\t
-.import {} accn_taxid
-"""
-
-
 def _prep_database(db_fp):
     conn = sqlite3.connect(db_fp)
-    conn.executescript(schema)
-    conn.commit()
-    return conn
+    try:
+        conn.executescript(schema)
+        conn.commit()
+    finally:
+        conn.close()
 
 
-def _insert_many(accn2taxid, db_fp=None, chunk_size=1000000, conn=None):
-    if db_fp is None and conn is None:
-        raise ValueError("Must specify either a db file or a connection")
+def _build_database(accn2taxid, db_fp, chunk_size=10000000):
     
-    con = sqlite3.connect(db_fp) if not conn else conn
-
+    con = sqlite3.connect(db_fp)
     con.text_factory = str
     cur = con.cursor()
+
+    lines = 110870098
+
     try:
         with gzip.open(accn2taxid) as infile:
             infile.next()
+            chunk_num = 1
+            nchunks = int(math.ceil(lines/chunk_size))
             while True:
                 chunk = list(itertools.islice(infile, chunk_size))
                 if not chunk:
                     break
-                pbar = tqdm(csv.reader(chunk, delimiter='\t'),
-                            unit='lines', total=len(chunk))
+                pbar = tqdm(
+                    csv.reader(chunk, delimiter='\t'),
+                    unit='lines', total=len(chunk),
+                    desc="Part {}/{}".format(chunk_num, nchunks))
                 for _, accn_var, taxid, _ in pbar:
                     cur.execute(
                         "INSERT OR IGNORE INTO accn_taxid VALUES (?,?)",
                         (accn_var, taxid))
-            con.commit()
+                con.commit()
+                chunk_num += 1
     finally:
         con.close()
-
-def _insert_many_streaming(accn2taxid, db_fp, conn = None):
-    con = sqlite3.connect(db_fp) if not conn else conn
-    con.text_factory = str
-    cur = con.cursor()
-    infile = gzip.open(accn2taxid)
-    try:
-        reader = tqdm(csv.reader(infile, delimiter='\t'), unit='lines', total=111000000)
-        for _, accn_var, taxid, _ in reader:
-            cur.execute(
-                "INSERT OR IGNORE INTO accn_taxid VALUES (?,?)", (accn_var, taxid))
-        con.commit()
-    finally:
-        con.close()
-        infile.close()
-        
         
 
 def _check_md5(md5_url, filename):
+    print("Detected existing file, checking integrity...")
     req = urllib2.Request(md5_url)
     remote_md5 = urllib2.urlopen(req).read().split(' ')[0]
+    print("  Remote file hash:\t{}".format(remote_md5))
     this_md5 = hashlib.md5(open(filename, 'rb').read()).hexdigest()
+    print("  Local file hash:\t{}".format(this_md5))
     return remote_md5 == this_md5
 
 
@@ -88,12 +77,12 @@ def download_nucl_gb_taxid(outfile):
         print("File already exists and has the same MD5 hash; skipping.")
         return
 
-    wget_available = subprocess.call(['command', '-v', 'wget']) == 0
-    curl_available = subprocess.call(['command', '-v', 'curl']) == 0
-    if wget_available:
+    # Try using wget
+    if subprocess.call(['command', '-v', 'wget'], shell=True) == 0:
         subprocess.check_call(
             ['wget', url, '-O', outfile])
-    elif curl_available:
+    # Try using curl
+    elif subprocess.call(['command', '-v', 'curl'], shell=True) == 0:
         subprocess.check_call(
             ['curl', '-o', outfile, url])
     else:
@@ -102,10 +91,12 @@ def download_nucl_gb_taxid(outfile):
     
 def main():
 
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Download the accession2taxid file and prepare it for use with BROCC.")
     
     parser.add_argument(
         '--db_fp',
+        metavar="DB_PATH",
         default="taxids.db",
         help="Name of database to create")
 
@@ -116,15 +107,39 @@ def main():
 
     parser.add_argument(
         '--accn2taxid_fp',
-        help="Path to accession2taxid gzipped file. If unspecified, will be downloaded.")
+        metavar="PATH",
+        default="nucl_gb.accession2taxid.gz",
+        help=(
+            "Path to accession2taxid gzipped file. If unspecified, will be "
+            "downloaded."))
+
+    parser.add_argument(
+        '--chunk_size',
+        metavar="INT",
+        default=10000000,
+        help=(
+            "Default number of records to insert at a time. Lower this if "
+            "you have memory issues. Default: %(default)s"))
 
     args = parser.parse_args()
 
     if os.path.exists(args.db_fp) and not args.force:
         print("Database file already exists. Specify --force to overwrite.")
-        return
-    else:
-        
+        exit(1)
+
+    ## --- Download the accn2taxid file from NCBI
+
+    download_nucl_gb_taxid(args.accn2taxid_fp)
+
+    ## --- Create the database
+    print("Creating database...")
+    _prep_database(args.db_fp)
+    _build_database(args.accn2taxid_fp, args.db_fp)
+
+    print("Finished. Database created at {}".format(args.db_fp))
+                
+if __name__ == "__main__":
+    main()
     
 
     
