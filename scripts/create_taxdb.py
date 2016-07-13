@@ -8,6 +8,7 @@ import contextlib
 import sqlite3
 import csv
 import itertools
+import argparse
 from tqdm import tqdm
 
 schema = """\
@@ -27,17 +28,17 @@ def _prep_database(db_fp):
     conn = sqlite3.connect(db_fp)
     conn.executescript(schema)
     conn.commit()
-    conn.close()
+    return conn
 
 
-def _insert_many(accn2taxid, db_fp, chunk_size=1000000):
-    con = sqlite3.connect(db_fp)
+def _insert_many(accn2taxid, db_fp=None, chunk_size=1000000, conn=None):
+    if db_fp is None and conn is None:
+        raise ValueError("Must specify either a db file or a connection")
+    
+    con = sqlite3.connect(db_fp) if not conn else conn
 
     con.text_factory = str
     cur = con.cursor()
-    # f = open(accn2taxid, 'rb')
-    # mapped = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-
     try:
         with gzip.open(accn2taxid) as infile:
             infile.next()
@@ -55,14 +56,27 @@ def _insert_many(accn2taxid, db_fp, chunk_size=1000000):
     finally:
         con.close()
 
+def _insert_many_streaming(accn2taxid, db_fp, conn = None):
+    con = sqlite3.connect(db_fp) if not conn else conn
+    con.text_factory = str
+    cur = con.cursor()
+    infile = gzip.open(accn2taxid)
+    try:
+        reader = tqdm(csv.reader(infile, delimiter='\t'), unit='lines', total=111000000)
+        for _, accn_var, taxid, _ in reader:
+            cur.execute(
+                "INSERT OR IGNORE INTO accn_taxid VALUES (?,?)", (accn_var, taxid))
+        con.commit()
+    finally:
+        con.close()
+        infile.close()
+        
+        
 
 def _check_md5(md5_url, filename):
     req = urllib2.Request(md5_url)
-    print("downloading hash")
     remote_md5 = urllib2.urlopen(req).read().split(' ')[0]
-    print("hashing file")
     this_md5 = hashlib.md5(open(filename, 'rb').read()).hexdigest()
-    print(remote_md5, this_md5)
     return remote_md5 == this_md5
 
 
@@ -85,17 +99,33 @@ def download_nucl_gb_taxid(outfile):
     else:
         raise RuntimeError(
             "Neither wget nor curl was found: cannot download taxonomy ids.")
+    
+def main():
 
+    parser = argparse.ArgumentParser()
+    
+    parser.add_argument(
+        '--db_fp',
+        default="taxids.db",
+        help="Name of database to create")
 
-def build_taxdict(accn2taxid_gz_fp, db_fp):
-    with gzip.open(accn2taxid_gz_fp) as accn2taxid:
-        # Skip header
-        accn2taxid.next()
-        with contextlib.closing(dbm.open(db_fp, 'c')) as db:
-            for line in tqdm(accn2taxid):
-                accn, accn_ver, taxid, gi = line.strip().split()
-                db[accn_ver] = taxid
+    parser.add_argument(
+        '--force', '-f',
+        action="store_true",
+        help="Overwrite database if it exists")
 
+    parser.add_argument(
+        '--accn2taxid_fp',
+        help="Path to accession2taxid gzipped file. If unspecified, will be downloaded.")
 
-def load_taxdict(db_fp):
-    return dbm.open(db_fp)
+    args = parser.parse_args()
+
+    if os.path.exists(args.db_fp) and not args.force:
+        print("Database file already exists. Specify --force to overwrite.")
+        return
+    else:
+        
+    
+
+    
+    
