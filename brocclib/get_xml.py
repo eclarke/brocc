@@ -1,10 +1,13 @@
 import json
-import urllib2, os, StringIO
+import urllib2
+import os
+import StringIO
 from xml.etree import ElementTree as ET
 import logging
 
 
 class NcbiEutils(object):
+
     def __init__(self, cache_fp=None):
         self.cache_fp = cache_fp
         self.lineages = {}
@@ -17,11 +20,11 @@ class NcbiEutils(object):
             self.lineages[taxon_id] = get_lineage(taxon_id)
         return self.lineages[taxon_id]
 
-    def get_taxon_id(self, gi_num):
-        if gi_num not in self.taxon_ids:
+    def get_taxon_id(self, acc):
+        if acc not in self.taxon_ids:
             self._fresh = False
-            self.taxon_ids[gi_num] = get_taxid(gi_num)
-        return self.taxon_ids[gi_num]
+            self.taxon_ids[acc] = get_taxid_from_accession(acc)
+        return self.taxon_ids[acc]
 
     def load_cache(self):
         # Do nothing if there is no cache file
@@ -52,7 +55,7 @@ class NcbiEutils(object):
         data = {
             "lineages": lineages,
             "taxon_ids": taxon_ids,
-            }
+        }
         with open(self.cache_fp, "w") as f:
             json.dump(data, f, indent=2, separators=(',', ': '))
 
@@ -100,10 +103,11 @@ def _get_xml_from_html(html_response):
 
 
 def get_lineage(taxid):
-    num_tries = 0 #numter of times db connection was attempted
+    num_tries = 0  # numter of times db connection was attempted
     while num_tries < 5:
-        try:        #watch out for db connection time out
-            url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=' + taxid + '&rettype=xml'
+        try:  # watch out for db connection time out
+            url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=taxonomy&id=' + \
+                taxid + '&rettype=xml'
             xml = urllib2.urlopen(url)
             xml_str = xml.read()
             xml_string_from_html = _get_xml_from_html(xml_str)
@@ -118,7 +122,7 @@ def get_lineage(taxid):
         except urllib2.URLError as e:
             num_tries += 1
             print e
-            print "Database connectiom timed out for taxon", taxid, "Will retry"
+            print "Database connection timed out for taxon", taxid, "Will retry"
         except Exception as e:
             num_tries += 1
             print e, "Will retry"
@@ -142,18 +146,32 @@ def url_open(url, max_tries=5):
     raise urllib2.URLError("Could not open URL %s (%s attempts)" % (url, n))
 
 
-def get_taxid(gi_num):
-    url = 'http://eutils.ncbi.nlm.nih.gov/entrez/eutils/elink.fcgi?dbfrom=nucleotide&db=taxonomy&id=%s' % gi_num
-    xpath = ".//Link/Id"
+def _get_taxid_from_accession(acc):
+    url = (
+        "http://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+        "?db=nuccore&id={0}&rettype=docsum".format(acc))
+    xpath = ".//Item[@Name='TaxId']"
     try:
         response = url_open(url)
         xml = ET.parse(response)
         elem = xml.find(xpath)
         if elem is None:
-            logging.debug("GI %s: Xpath %s not found in XML" % (gi_num, xpath))
+            logging.debug("Accession %s: Xpath %s not found in XML" %
+                          (acc, xpath))
             return None
         return elem.text
     except Exception as e:
-        logging.info("GI %s: %s" % (gi_num, e))
+        logging.info("Accession %s: %s" % (acc, e))
         return None
 
+
+def get_taxid_from_accession(acc):
+    from Bio import Entrez
+    Entrez.email = "ecl@mail.med.upenn.edu"
+    result = Entrez.read(Entrez.elink(
+        dbfrom="nucleotide", id=acc, linkname="nucleotide_taxonomy"))
+    try:
+        return result[0]["LinkSetDb"][0]["Link"][0]["Id"]
+    except (IndexError, KeyError) as e:
+        logging.info("Accession %s: %s" % (acc, e))
+        return None

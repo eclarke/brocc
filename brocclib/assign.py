@@ -7,7 +7,9 @@ Created on Aug 29, 2011
 @author: Serena, Kyle
 '''
 
+
 class AssignmentCandidate(object):
+
     def __init__(self, lineage, rank):
         self.votes = 0
         self.lineage = lineage
@@ -30,6 +32,7 @@ class AssignmentCandidate(object):
 
 
 class Assignment(object):
+
     def __init__(self, query_id, winning_candidate, total_votes, num_generic):
         self.query_id = query_id
         self.winning_candidate = winning_candidate
@@ -53,6 +56,7 @@ class Assignment(object):
 
 class NoAssignment(object):
     """Null object representing no assignment, with message."""
+
     def __init__(self, query_id, message):
         self.query_id = query_id
         self.message = message
@@ -68,19 +72,21 @@ class Assigner(object):
     ranks = [
         "species", "genus", "family", "order",
         "class", "phylum", "kingdom", "domain",
-        ]
+    ]
 
     def __init__(self, min_cover, species_min_id, genus_min_id, min_id,
-                 consensus_thresholds, max_generic, taxa_db):
+                 consensus_thresholds, max_generic, taxa_db, taxdict, taxonomy):
         self.min_cover = min_cover
         self.rank_min_ids = [
             species_min_id, genus_min_id, min_id, min_id,
             min_id, min_id, min_id, min_id,
-            ]
+        ]
         self.min_id = min_id
         self.consensus_thresholds = consensus_thresholds
         self.max_generic = max_generic
         self.taxa_db = taxa_db
+        self.taxdict = taxdict
+        self.taxonomy = taxonomy
 
     def _quality_filter(self, seq, hits):
         hits_to_keep = []
@@ -109,13 +115,19 @@ class Assigner(object):
         return self.vote(name, seq, hits_to_keep)
 
     def _retrieve_lineage(self, hit):
-        taxid = self.taxa_db.get_taxon_id(hit.gi)
+        taxid = self.taxdict.get(hit.accession)
+        # taxid = self.taxa_db.get_taxon_id(hit.accession)
         if taxid is None:
             return NoLineage()
-        raw_lineage = self.taxa_db.get_lineage(taxid)
-        if raw_lineage is None:
+        lineage = self.taxonomy.get(taxid)
+        if lineage is None:
             return NoLineage()
-        return Lineage(raw_lineage)
+        else:
+            return lineage
+        # raw_lineage = self.taxa_db.get_lineage(taxid)
+        # if raw_lineage is None:
+        #     return NoLineage()
+        # return Lineage(raw_lineage)
 
     def vote(self, name, seq, hits):
         # Sort hits by percent ID.  This affects the way that ties are broken.

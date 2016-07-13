@@ -5,6 +5,7 @@ Created on Aug 29, 2011
 @authors: Serena, Kyle
 '''
 
+
 def iter_fasta(fasta_lines):
     """Yield sequences as (name, value) pairs from a FASTA file."""
     seq = ""
@@ -22,8 +23,10 @@ def iter_fasta(fasta_lines):
 
 
 class BlastHit(object):
-    def __init__(self, gi, pct_id, length):
+
+    def __init__(self, gi, accession, pct_id, length):
         self.gi = gi
+        self.accession = accession
         self.pct_id = pct_id
         self.length = length
 
@@ -46,12 +49,11 @@ def iter_blast(blast_lines):
                 query_id = vals[0]
             else:
                 query_id = full_query_id
-            # Need to extract the GI number from the NCBI formatted
-            # reference ID.
-            gi_num = parse_gi_number(vals[1])
+            gi = parse_gi(vals[1])
+            accession = parse_accession(vals[1])
             pct_id = float(vals[2])
             length = float(vals[3])
-            hit = BlastHit(gi_num, pct_id, length)
+            hit = BlastHit(gi, accession, pct_id, length)
             yield query_id, hit
 
 
@@ -63,11 +65,15 @@ def read_blast(blast_lines):
     return res
 
 
-def parse_gi_number(id_string):
-        """Recover a GI number from a formatted id string in the nt database."""
-        tokens = id_string.split('|')
-        for t1, t2 in zip(tokens, tokens[1:]):
-            if t1 == 'gi':
-                return t2
-        return None
+def parse_accession(desc):
+    if "|" in desc:
+        # Old format
+        return desc.split("|")[3]
+    else:
+        # New format
+        return desc
 
+
+def parse_gi(desc):
+    if desc.startswith("gi|"):
+        return desc.split("|")[1]
