@@ -1,63 +1,12 @@
-from __future__ import division
 import hashlib
-import math
 import subprocess
 import urllib2
 import os
 import gzip
-import sqlite3
-import csv
-import itertools
 import argparse
 
-from tqdm import tqdm
+from brocclib.database import TaxIdDb
 
-schema = """\
-DROP TABLE IF EXISTS accn_taxid;
-CREATE TABLE accn_taxid(
-   accn_ver CHARACTER NOT NULL PRIMARY KEY,
-   taxid INT NOT NULL);
-"""
-
-def _prep_database(db_fp):
-    conn = sqlite3.connect(db_fp)
-    try:
-        conn.executescript(schema)
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def _build_database(accn2taxid, db_fp, chunk_size=10000000):
-    
-    con = sqlite3.connect(db_fp)
-    con.text_factory = str
-    cur = con.cursor()
-
-    lines = 110870098
-
-    try:
-        with gzip.open(accn2taxid) as infile:
-            infile.next()
-            chunk_num = 1
-            nchunks = int(math.ceil(lines/chunk_size))
-            while True:
-                chunk = list(itertools.islice(infile, chunk_size))
-                if not chunk:
-                    break
-                pbar = tqdm(
-                    csv.reader(chunk, delimiter='\t'),
-                    unit='lines', total=len(chunk),
-                    desc="Part {}/{}".format(chunk_num, nchunks))
-                for _, accn_var, taxid, _ in pbar:
-                    cur.execute(
-                        "INSERT OR IGNORE INTO accn_taxid VALUES (?,?)",
-                        (accn_var, taxid))
-                con.commit()
-                chunk_num += 1
-    finally:
-        con.close()
-        
 
 def _check_md5(md5_url, filename):
     print("Detected existing file, checking integrity...")
@@ -88,12 +37,13 @@ def download_nucl_gb_taxid(outfile):
     else:
         raise RuntimeError(
             "Neither wget nor curl was found: cannot download taxonomy ids.")
-    
+
+
 def main():
 
     parser = argparse.ArgumentParser(
         description="Download the accession2taxid file and prepare it for use with BROCC.")
-    
+
     parser.add_argument(
         '--db_fp',
         metavar="DB_PATH",
@@ -127,20 +77,17 @@ def main():
         print("Database file already exists. Specify --force to overwrite.")
         exit(1)
 
-    ## --- Download the accn2taxid file from NCBI
+    # --- Download the accn2taxid file from NCBI
 
     download_nucl_gb_taxid(args.accn2taxid_fp)
 
-    ## --- Create the database
+    # --- Create the database
     print("Creating database...")
-    _prep_database(args.db_fp)
-    _build_database(args.accn2taxid_fp, args.db_fp)
+    with TaxIdDb(args.db_fp, create=True) as db:
+        with gzip.open(args.accn2taxid_fp) as infile:
+            db.populate(infile)
 
     print("Finished. Database created at {}".format(args.db_fp))
-                
+
 if __name__ == "__main__":
     main()
-    
-
-    
-    
